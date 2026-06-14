@@ -8,7 +8,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { Parser } = require('rss-parser');
-const pLimit = require('p-limit');
+const pLimit = require('p-limit').default;
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
