@@ -7,8 +7,8 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { Parser } = require('rss-parser');
-const pLimit = require('p-limit');
+const Parser = require('rss-parser');
+const pLimit = require('p-limit').default;
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
@@ -188,6 +188,9 @@ class Logger {
     };
     
     console.log(`[${level}] ${timestamp} - ${message}`);
+    if (Object.keys(metadata).length > 0) {
+      console.log(metadata);
+    }
     fs.appendFileSync(this.logFile, JSON.stringify(logEntry) + '\n');
   }
 
@@ -368,10 +371,7 @@ class ScraperOSINT {
       const response = await axios.get(portal.url, {
         timeout: CONFIG.timeout,
         headers: { 'User-Agent': CONFIG.userAgent },
-        maxRedirects: 5,
-        httpsAgent: new (require('https').Agent)({
-          rejectUnauthorized: false // SSL bypass
-        })
+        maxRedirects: 5
       });
 
       const $ = cheerio.load(response.data);
