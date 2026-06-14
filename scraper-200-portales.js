@@ -280,12 +280,15 @@ class ScraperOSINT {
 
       } catch (error) {
         attempt++;
+        // Retry exponencial: 2s -> 4s -> 8s
+        const exponentialDelay = CONFIG.retryDelay * Math.pow(2, attempt - 1);
         logger.warn(`⚠️ Intento ${attempt}/${CONFIG.retryAttempts}: ${portal.nombre}`, { 
-          error: error.message 
+          error: error.message,
+          nextRetryIn: `${exponentialDelay}ms`
         });
 
         if (attempt < CONFIG.retryAttempts) {
-          await new Promise(r => setTimeout(r, CONFIG.retryDelay));
+          await new Promise(r => setTimeout(r, exponentialDelay));
         }
       }
     }
@@ -303,13 +306,39 @@ class ScraperOSINT {
     });
   }
 
+  // ==================== FUNCIONES AUXILIARES ====================
+
+  sanitizeXML(xml) {
+    // Reemplazar & no codificadas por &amp;
+    return xml.replace(/&(?!#?[a-zA-Z0-9]+;)/g, '&amp;')
+              // Remover caracteres de control inválidos
+              .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+              // Cerrar etiquetas sin cerrar
+              .replace(/(<[^>]+)(?!>)$/gm, '$1>');
+  }
+
   async scrapearRSS(portal, candidatos) {
     const parser = new Parser({
-      timeout: CONFIG.timeout
+      timeout: CONFIG.timeout,
+      requestOptions: {
+        rejectUnauthorized: false, // SSL bypass para certificados inválidos
+        headers: { 'User-Agent': CONFIG.userAgent }
+      }
     });
 
     try {
-      const feed = await parser.parseURL(portal.url);
+      // Obtener XML crudo
+      const response = await axios.get(portal.url, {
+        timeout: CONFIG.timeout,
+        headers: { 'User-Agent': CONFIG.userAgent },
+        maxRedirects: 5
+      });
+
+      // Sanitizar XML antes de parsear
+      const sanitizedXML = this.sanitizeXML(response.data);
+
+      // Parsear XML sanitizado
+      const feed = await parser.parseString(sanitizedXML);
       const items = feed.items || [];
       const datos = {};
 
@@ -340,7 +369,10 @@ class ScraperOSINT {
       const response = await axios.get(portal.url, {
         timeout: CONFIG.timeout,
         headers: { 'User-Agent': CONFIG.userAgent },
-        maxRedirects: 5
+        maxRedirects: 5,
+        httpsAgent: new (require('https').Agent)({
+          rejectUnauthorized: false // SSL bypass
+        })
       });
 
       const $ = cheerio.load(response.data);
