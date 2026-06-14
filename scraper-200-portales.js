@@ -25,8 +25,8 @@ const CONFIG = {
   timeout: 8000,
   retryAttempts: 3,
   retryDelay: 2000,
-  outputDir: './data/scraped',
-  logDir: './data/logs',
+  outputDir: process.env.OUTPUT_DIR || '/tmp/osint-data',
+  logDir: process.env.LOG_DIR || '/tmp/osint-logs',
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
