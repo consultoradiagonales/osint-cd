@@ -421,7 +421,11 @@ async function main() {
     logger.success('🎉 SCRAPING COMPLETADO');
     process.exit(0);
   } catch (error) {
-    logger.error('💥 ERROR FATAL', { error: error.message });
+    logger.error('💥 ERROR FATAL', { 
+  message: error.message,
+  stack: error.stack,
+  name: error.name
+});
     process.exit(1);
   }
 }
