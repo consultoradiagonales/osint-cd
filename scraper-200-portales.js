@@ -188,6 +188,9 @@ class Logger {
     };
     
     console.log(`[${level}] ${timestamp} - ${message}`);
+    if (Object.keys(metadata).length > 0) {
+      console.log(metadata);
+    }
     fs.appendFileSync(this.logFile, JSON.stringify(logEntry) + '\n');
   }
 
@@ -422,10 +425,10 @@ async function main() {
     process.exit(0);
   } catch (error) {
     logger.error('💥 ERROR FATAL', { 
-  message: error.message,
-  stack: error.stack,
-  name: error.name
-});
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     process.exit(1);
   }
 }
