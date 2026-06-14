@@ -7,8 +7,8 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { Parser } = require('rss-parser');
-const pLimit = require('p-limit');
+const Parser = require('rss-parser');
+const pLimit = require('p-limit').default;
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
@@ -188,6 +188,9 @@ class Logger {
     };
     
     console.log(`[${level}] ${timestamp} - ${message}`);
+    if (Object.keys(metadata).length > 0) {
+      console.log(metadata);
+    }
     fs.appendFileSync(this.logFile, JSON.stringify(logEntry) + '\n');
   }
 
@@ -453,7 +456,11 @@ async function main() {
     logger.success('🎉 SCRAPING COMPLETADO');
     process.exit(0);
   } catch (error) {
-    logger.error('💥 ERROR FATAL', { error: error.message });
+    logger.error('💥 ERROR FATAL', { 
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     process.exit(1);
   }
 }
