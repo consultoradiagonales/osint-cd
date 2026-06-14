@@ -7,8 +7,8 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const Parser = require('rss-parser');
-const pLimit = require('p-limit').default;
+const { Parser } = require('rss-parser');
+const pLimit = require('p-limit');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
@@ -188,9 +188,6 @@ class Logger {
     };
     
     console.log(`[${level}] ${timestamp} - ${message}`);
-    if (Object.keys(metadata).length > 0) {
-      console.log(metadata);
-    }
     fs.appendFileSync(this.logFile, JSON.stringify(logEntry) + '\n');
   }
 
@@ -312,12 +309,11 @@ class ScraperOSINT {
   // ==================== FUNCIONES AUXILIARES ====================
 
   sanitizeXML(xml) {
-    // Reemplazar & no codificadas por &amp;
-    return xml.replace(/&(?!#?[a-zA-Z0-9]+;)/g, '&amp;')
-              // Remover caracteres de control inválidos
-              .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-              // Cerrar etiquetas sin cerrar
-              .replace(/(<[^>]+)(?!>)$/gm, '$1>');
+    // Solo remover caracteres de control inválidos
+    // NO tocar tags ni estructura XML
+    return xml
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Caracteres de control
+      .replace(/&(?!#?[a-zA-Z0-9]+;)/g, '&amp;');         // & no codificadas
   }
 
   async scrapearRSS(portal, candidatos) {
@@ -456,11 +452,7 @@ async function main() {
     logger.success('🎉 SCRAPING COMPLETADO');
     process.exit(0);
   } catch (error) {
-    logger.error('💥 ERROR FATAL', { 
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
+    logger.error('💥 ERROR FATAL', { error: error.message });
     process.exit(1);
   }
 }
