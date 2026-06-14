@@ -1,0 +1,31 @@
+{
+  "name": "osint-consultora-diagonales",
+  "version": "2.0.0",
+  "description": "Sistema OSINT automatizado 200+ portales + WhatsApp Baileys + Dashboard interactivo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "scraper": "node scraper-200-portales.js",
+    "whatsapp": "node whatsapp-baileys-cd.js",
+    "dashboard": "node dashboard-generator.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["osint", "scraping", "whatsapp", "baileys", "politica"],
+  "author": "Consultora Diagonales",
+  "license": "MIT",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.5.0",
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "moment-timezone": "^0.5.45",
+    "node-cron": "^3.0.3",
+    "p-limit": "^5.0.0",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "rss-parser": "^3.13.0"
+  }
+}
