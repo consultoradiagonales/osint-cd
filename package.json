@@ -4,7 +4,7 @@
   "description": "Sistema OSINT automatizado 200+ portales + WhatsApp Baileys + Dashboard interactivo",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node scraper-200-portales.js",
     "scraper": "node scraper-200-portales.js",
     "whatsapp": "node whatsapp-baileys-cd.js",
     "dashboard": "node dashboard-generator.js",
