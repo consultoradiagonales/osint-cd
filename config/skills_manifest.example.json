@@ -1,0 +1,30 @@
+[
+  {
+    "name": "DIAGONALES INTELLIGENCE",
+    "category": "orchestrator",
+    "keywords": ["osint", "socmint", "politica", "territorio", "campaña", "redes", "github", "analisis"],
+    "activation_hint": "Agente maestro: decide fuentes, módulos, riesgos, salida y narrativa.",
+    "priority": 10
+  },
+  {
+    "name": "LA_PODEROSA",
+    "category": "osint-core",
+    "keywords": ["scraping", "fuentes", "medios", "portales", "boletines", "sociedades", "licitaciones"],
+    "activation_hint": "Discovery OSINT, scraping público, normalización y trazabilidad.",
+    "priority": 9
+  },
+  {
+    "name": "Rastreo RP",
+    "category": "media-discovery",
+    "keywords": ["medios", "portal", "radio", "municipio", "local", "provincial", "noticias"],
+    "activation_hint": "Buscar medios locales/provinciales, URLs, narrativa y actores territoriales.",
+    "priority": 8
+  },
+  {
+    "name": "Detector Bots Redes",
+    "category": "socmint-integrity",
+    "keywords": ["bots", "astroturfing", "amplificacion", "fake", "seguidores", "redes"],
+    "activation_hint": "Scoring 0-100 de comportamiento artificial, coordinación y amplificación.",
+    "priority": 7
+  }
+]
