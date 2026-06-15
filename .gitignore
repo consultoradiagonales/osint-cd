@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Outputs / evidence
+outputs/
+data/output*.json
+data/output*.jsonl
+data/output*.csv
+evidence/screenshots/
+*.log
+
+# Local browser/session data
+.brave-profile/
+chrome-profile/
+config.ini
+secrets.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
