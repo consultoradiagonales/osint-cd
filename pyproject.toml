@@ -18,6 +18,9 @@ dependencies = [
   "python-dateutil>=2.9.0"
 ]
 
+[project.optional-dependencies]
+social = ["social-analyzer>=2.0.0"]
+
 [project.scripts]
 osint-cd = "osint_cd.cli:main"
 
