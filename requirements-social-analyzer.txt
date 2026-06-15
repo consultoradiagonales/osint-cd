@@ -1,0 +1,3 @@
+# Optional upstream integration.
+# qeeqbox/social-analyzer is AGPL-3.0; keep it as an external dependency/vendor checkout.
+social-analyzer>=2.0.0
