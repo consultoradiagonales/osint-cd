@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ from osint_cd.browser import BraveBrowser, BrowserConfig
 from osint_cd.collectors.registry import get_collector
 from osint_cd.exporters import write_output
 from osint_cd.integrations.social_analyzer import SocialAnalyzerAdapter, SocialAnalyzerConfig
+from osint_cd.llm.orchestrator import LLMOrchestrator, OrchestratorConfig
 from osint_cd.models import Target
 
 
@@ -41,6 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
     social.add_argument("--website", action="append", default=[])
     social.add_argument("--vendor-path", default="vendor/social-analyzer")
     social.add_argument("--subprocess", action="store_true")
+
+    llm = sub.add_parser("llm-plan", help="Crea un paquete de trabajo para IA/LLM")
+    llm.add_argument("--request", required=True, help="Pedido en lenguaje natural")
+    llm.add_argument("--github-results", help="JSON con resultados GitHub ya obtenidos")
+    llm.add_argument("--skills-path", help="JSON opcional con manifiesto de skills")
+    llm.add_argument("--output", required=True)
+    llm.add_argument("--format", choices=["json", "jsonl", "csv"])
 
     return parser
 
@@ -85,6 +94,15 @@ def run_social_analyzer(args: argparse.Namespace) -> Path:
     return write_output(args.output, results, args.format)
 
 
+def run_llm_plan(args: argparse.Namespace) -> Path:
+    github_results = None
+    if args.github_results:
+        github_results = json.loads(Path(args.github_results).read_text(encoding="utf-8"))
+    orchestrator = LLMOrchestrator(OrchestratorConfig(skills_path=args.skills_path))
+    packet = orchestrator.plan(args.request, github_results=github_results)
+    return write_output(args.output, [packet], args.format)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -92,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         output = run_render(args)
     elif args.command == "social-analyzer":
         output = run_social_analyzer(args)
+    elif args.command == "llm-plan":
+        output = run_llm_plan(args)
     else:
         parser.error("Comando desconocido")
         return 2
