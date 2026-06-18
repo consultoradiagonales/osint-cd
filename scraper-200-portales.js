@@ -311,12 +311,203 @@ class ScraperOSINT {
 
   // ==================== FUNCIONES AUXILIARES ====================
 
-  sanitizeXML(xml) {
-    // Solo remover caracteres de control inválidos
-    // NO tocar tags ni estructura XML
-    return xml
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Caracteres de control
-      .replace(/&(?!#?[a-zA-Z0-9]+;)/g, '&amp;');         // & no codificadas
+  /**
+   * Reglas de sanitización específicas por portal.
+   *
+   * Grupo A — Line 60, Col 8 (Clarín, Infobae, Página 12):
+   *   Feeds con tags sin cerrar o mal anidados en el bloque de cabecera del
+   *   canal (~línea 60). Se detecta y cierra/elimina el tag problemático.
+   *
+   * Grupo B — Line 136, Col 117 (La Nación, Perfil, Cronista):
+   *   Feeds con atributos de comillas sin escapar o referencias de entidad
+   *   rotas dentro de elementos <item> (~línea 136). Se normalizan in-situ.
+   */
+  get PORTAL_SANITIZATION_RULES() {
+    return {
+      // ── Grupo A: unclosed/mismatched tags around line 60 ──────────────────
+
+      'Clarín': (xml) => {
+        // Cierra <image> sin cerrar que aparece en el bloque <channel>
+        xml = xml.replace(
+          /<image>(?![\s\S]*?<\/image>)([\s\S]*?)(<item[\s>])/,
+          '<image>$1</image>$2'
+        );
+        // Elimina atributos xmlns duplicados que confunden al parser
+        xml = xml.replace(
+          /(<rss[^>]*)\s+xmlns:\w+="[^"]*"(\s+xmlns:\w+="[^"]*")+/,
+          (match, base) => base
+        );
+        logger.info('🔧 Sanitización Clarín (Grupo A) aplicada');
+        return xml;
+      },
+
+      'Infobae': (xml) => {
+        // Infobae a veces emite <link> sin cerrar dentro de <channel>
+        xml = xml.replace(
+          /<link>([^<]*?)(?=<(?!\/link>))/g,
+          '<link>$1</link>'
+        );
+        // Elimina processing instructions no estándar que rompen el parser
+        xml = xml.replace(/<\?[^?]*\?>/g, (match) =>
+          match.startsWith('<?xml') ? match : ''
+        );
+        logger.info('🔧 Sanitización Infobae (Grupo A) aplicada');
+        return xml;
+      },
+
+      'Página 12': (xml) => {
+        // Página 12 deja <description> sin cerrar en el bloque de canal
+        xml = xml.replace(
+          /<description>([\s\S]*?)(?=<(?!\/description>)\w)/g,
+          (match, content) => `<description>${content}</description>`
+        );
+        // Elimina comentarios HTML mal formados (<!-- sin cierre -->)
+        xml = xml.replace(/<!--(?![\s\S]*?-->)/g, '');
+        logger.info('🔧 Sanitización Página 12 (Grupo A) aplicada');
+        return xml;
+      },
+
+      // ── Grupo B: malformed attributes/entities around line 136 ───────────
+
+      'La Nación': (xml) => {
+        // Normaliza comillas tipográficas dentro de atributos XML
+        xml = xml.replace(/="([^"]*)"/g, (match, val) =>
+          `="${val.replace(/[\u201C\u201D\u201E\u201F]/g, '&quot;')}"`
+        );
+        // Escapa & residuales dentro de valores de atributos
+        xml = xml.replace(/(\w+)="([^"]*)"/g, (match, attr, val) =>
+          `${attr}="${val.replace(/&(?!#?[a-zA-Z0-9]+;)/g, '&amp;')}"`
+        );
+        logger.info('🔧 Sanitización La Nación (Grupo B) aplicada');
+        return xml;
+      },
+
+      'Perfil': (xml) => {
+        // Perfil incluye HTML sin escapar dentro de <description> fuera de CDATA
+        xml = xml.replace(
+          /<description>(?!\s*<!\[CDATA\[)([\s\S]*?)<\/description>/g,
+          (match, content) => `<description><![CDATA[${content}]]></description>`
+        );
+        // Repara referencias de entidad rotas (& seguido de espacio, ; o <)
+        xml = xml.replace(/&(\s|;|<)/g, '&amp;$1');
+        logger.info('🔧 Sanitización Perfil (Grupo B) aplicada');
+        return xml;
+      },
+
+      'Cronista': (xml) => {
+        // Cronista emite atributos con comillas simples mezcladas con dobles
+        xml = xml.replace(/<([a-zA-Z][^\s>]*)(\s[^>]*)?>/g, (match, tag, attrs) => {
+          if (!attrs) return match;
+          // Normaliza atributos con comillas simples a dobles
+          const fixedAttrs = attrs.replace(
+            /(\w[\w:-]*)='([^']*)'/g,
+            (m, name, val) => `${name}="${val.replace(/"/g, '&quot;')}"`
+          );
+          return `<${tag}${fixedAttrs}>`;
+        });
+        logger.info('🔧 Sanitización Cronista (Grupo B) aplicada');
+        return xml;
+      }
+    };
+  }
+
+  /**
+   * Sanitiza XML en dos pasadas:
+   *   1. Reparaciones genéricas (caracteres de control, entidades, CDATA, etc.)
+   *   2. Regla específica del portal (si existe en PORTAL_SANITIZATION_RULES)
+   *
+   * @param {string} xml       - XML crudo recibido del feed
+   * @param {string} [portal]  - Nombre del portal para aplicar regla específica
+   * @returns {{ xml: string, rulesApplied: string[] }}
+   */
+  sanitizeXML(xml, portal = null) {
+    const rulesApplied = [];
+
+    // ── Pasada 1: reparaciones genéricas ────────────────────────────────────
+
+    // 1a. Caracteres de control inválidos en XML 1.0
+    xml = xml.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    rulesApplied.push('strip-control-chars');
+
+    // 1b. Caracteres Unicode no permitidos en XML (surrogates sueltos, BOM)
+    xml = xml.replace(/[\uFFFE\uFFFF]/g, '');
+    xml = xml.replace(/[\uD800-\uDFFF]/g, '');
+    rulesApplied.push('strip-invalid-unicode');
+
+    // 1c. & no codificadas fuera de CDATA y fuera de referencias de entidad
+    //     Preserva secciones CDATA intactas y solo escapa & sueltas en el resto
+    const cdataParts = xml.split(/(<!\[CDATA\[[\s\S]*?\]\]>)/);
+    xml = cdataParts.map((part, i) => {
+      // Los índices impares son secciones CDATA — no tocar
+      if (i % 2 === 1) return part;
+      return part.replace(/&(?!#?[a-zA-Z0-9]{1,20};)/g, '&amp;');
+    }).join('');
+    rulesApplied.push('escape-bare-ampersands');
+
+    // 1d. Secciones CDATA mal cerradas (]]> faltante antes de </description>)
+    xml = xml.replace(
+      /<!\[CDATA\[([\s\S]*?)(?=<\/(?:description|title|content|summary)>)/g,
+      (match, content) => {
+        if (match.endsWith(']]>')) return match;
+        return `<![CDATA[${content}]]>`;
+      }
+    );
+    rulesApplied.push('fix-unclosed-cdata');
+
+    // 1e. Referencias de entidad HTML comunes que XML no reconoce nativamente
+    const HTML_ENTITIES = {
+      '&nbsp;': '&#160;',   '&mdash;': '&#8212;', '&ndash;': '&#8211;',
+      '&laquo;': '&#171;',  '&raquo;': '&#187;',  '&ldquo;': '&#8220;',
+      '&rdquo;': '&#8221;', '&lsquo;': '&#8216;', '&rsquo;': '&#8217;',
+      '&hellip;': '&#8230;','&copy;': '&#169;',   '&reg;': '&#174;',
+      '&trade;': '&#8482;', '&euro;': '&#8364;',  '&pound;': '&#163;',
+      '&yen;': '&#165;',    '&cent;': '&#162;',   '&deg;': '&#176;',
+      '&agrave;': '&#224;', '&aacute;': '&#225;', '&eacute;': '&#233;',
+      '&iacute;': '&#237;', '&oacute;': '&#243;', '&uacute;': '&#250;',
+      '&ntilde;': '&#241;', '&Ntilde;': '&#209;', '&iexcl;': '&#161;',
+      '&iquest;': '&#191;'
+    };
+    const entityPattern = Object.keys(HTML_ENTITIES)
+      .map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    xml = xml.replace(new RegExp(entityPattern, 'g'), (match) =>
+      HTML_ENTITIES[match] || match
+    );
+    rulesApplied.push('normalize-html-entities');
+
+    // ── Pasada 2: regla específica del portal ────────────────────────────────
+    if (portal && this.PORTAL_SANITIZATION_RULES[portal]) {
+      xml = this.PORTAL_SANITIZATION_RULES[portal](xml);
+      rulesApplied.push(`portal-rule:${portal}`);
+    }
+
+    return { xml, rulesApplied };
+  }
+
+  /**
+   * Extrae un fragmento de contexto alrededor de la posición de error XML.
+   * @param {string} xml
+   * @param {number} line   - 1-based
+   * @param {number} col    - 1-based
+   * @param {number} radius - caracteres a cada lado del punto de error
+   */
+  _xmlErrorSnippet(xml, line, col, radius = 100) {
+    const lines = xml.split('\n');
+    if (line < 1 || line > lines.length) return xml.substring(0, 200);
+    const targetLine = lines[line - 1] || '';
+    const start = Math.max(0, col - 1 - radius);
+    const end = Math.min(targetLine.length, col - 1 + radius);
+    return targetLine.substring(start, end);
+  }
+
+  /**
+   * Parsea el mensaje de error del parser XML para extraer línea y columna.
+   * Soporta formatos: "Line X, Column Y" y "line X column Y".
+   */
+  _parseXMLErrorPosition(message) {
+    const m = message.match(/[Ll]ine[:\s]+(\d+)[,\s]+[Cc]ol(?:umn)?[:\s]+(\d+)/);
+    if (m) return { line: parseInt(m[1], 10), col: parseInt(m[2], 10) };
+    return null;
   }
 
   async scrapearRSS(portal, candidatos) {
@@ -336,11 +527,40 @@ class ScraperOSINT {
         maxRedirects: 5
       });
 
-      // Sanitizar XML antes de parsear
-      const sanitizedXML = this.sanitizeXML(response.data);
+      // ── Sanitizar XML (genérico + regla específica del portal) ────────────
+      const { xml: sanitizedXML, rulesApplied } = this.sanitizeXML(
+        response.data,
+        portal.nombre
+      );
 
-      // Parsear XML sanitizado
-      const feed = await parser.parseString(sanitizedXML);
+      logger.info(`🧹 XML sanitizado: ${portal.nombre}`, {
+        rulesApplied,
+        originalLength: response.data.length,
+        sanitizedLength: sanitizedXML.length
+      });
+
+      // ── Parsear XML sanitizado ────────────────────────────────────────────
+      let feed;
+      try {
+        feed = await parser.parseString(sanitizedXML);
+      } catch (parseError) {
+        // Enriquecer el error con posición exacta y fragmento del XML problemático
+        const pos = this._parseXMLErrorPosition(parseError.message);
+        const snippet = pos
+          ? this._xmlErrorSnippet(sanitizedXML, pos.line, pos.col)
+          : sanitizedXML.substring(0, 200);
+
+        logger.error(`❌ XML parse error en ${portal.nombre}`, {
+          error: parseError.message,
+          line: pos ? pos.line : 'unknown',
+          column: pos ? pos.col : 'unknown',
+          snippet,
+          rulesApplied
+        });
+
+        throw parseError;
+      }
+
       const items = feed.items || [];
       const datos = {};
 
@@ -365,6 +585,7 @@ class ScraperOSINT {
       throw new Error(`RSS parsing failed: ${error.message}`);
     }
   }
+
 
   async scrapearHTML(portal, candidatos) {
     try {
